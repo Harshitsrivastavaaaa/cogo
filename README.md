@@ -7,7 +7,7 @@
 ## 🗺️ Free & Open-Source Map Engine Architecture
 
 CoGo is architected to operate with **zero map API costs** using the global open-source geospatial ecosystem:
-
+dd
 ```mermaid
 flowchart LR
     Browser["📱 CoGo Web Client"] -->|Map Display Tiles| CARTO["🗺️ CARTO Voyager / OSM Tiles\n(Free, No API Key)"]
