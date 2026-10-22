@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CoGo — Smarter, Faster Urban Mobility</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚗</text></svg>">
+  
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- Google Fonts: Plus Jakarta Sans / Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Global App Header -->
+  <header class="cogo-header">
+    <div class="header-left">
+      <div class="cogo-logo">
+        <span class="logo-co">Co</span><span class="logo-go">Go</span>
+        <span class="logo-tag">Mobility</span>
+      </div>
+      <div class="city-pill">
+        <span class="pulse-dot"></span>
+        <span id="current-region">Delhi NCR</span>
+      </div>
+    </div>
+    
+    <div class="header-center">
+      <nav class="nav-modes">
+        <button class="nav-tab active" id="tab-rider" onclick="switchMainTab('rider')">
+          <span class="nav-icon">🧑</span> Rider
+        </button>
+        <button class="nav-tab" id="tab-driver" onclick="switchMainTab('driver')">
+          <span class="nav-icon">🚖</span> Captain Console
+        </button>
+        <button class="nav-tab" id="tab-history" onclick="switchMainTab('history')">
+          <span class="nav-icon">📜</span> Past Rides
+        </button>
+      </nav>
+    </div>
+
+    <div class="header-right">
+      <button class="safety-btn" onclick="openSafetyModal()">
+        <span class="shield-icon">🛡️</span> Safety Hub
+      </button>
+      <div class="wallet-badge" title="CoGo Wallet Balance">
+        <span class="wallet-icon">💳</span>
+        <span class="wallet-amt" id="wallet-balance-amt">₹500</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="cogo-main">
+    <!-- Left Interaction Drawer -->
+    <aside class="sidebar-drawer">
+      
+      <!-- ==================== RIDER VIEW ==================== -->
+      <div id="panel-rider" class="view-panel active">
+        
+        <!-- STAGE 1: BOOKING & RIDE SETUP -->
+        <div id="stage-booking-setup">
+          <div class="panel-headline">
+            <h2>Book Your Next Ride</h2>
+            <p class="panel-sub">Clean cars, verified captains, transparent pricing</p>
+          </div>
+
+          <!-- Schedule vs Ride Now Toggle -->
+          <div class="timing-toggle-bar">
+            <button class="time-toggle-btn active" id="btn-ride-now" onclick="toggleSchedule(false)">⚡ Ride Now</button>
+            <button class="time-toggle-btn" id="btn-ride-later" onclick="toggleSchedule(true)">📅 Reserve for Later</button>
+          </div>
+
+          <div id="schedule-picker-box" class="schedule-box" style="display: none;">
+            <label>Pickup Date & Time:</label>
+            <input type="datetime-local" id="input-schedule-time">
+          </div>
+
+          <!-- Location Search Inputs -->
+          <div class="location-group">
+            <div class="loc-input-wrapper">
+              <span class="loc-bullet pickup-bullet"></span>
+              <input type="text" id="input-pickup" placeholder="Enter pickup address or landmark" autocomplete="off">
+              <button class="loc-action-btn" id="btn-pick-pickup" title="Pick point directly on map">📍 Map</button>
+              <div class="autocomplete-dropdown" id="pickup-autocomplete"></div>
+            </div>
+
+            <div class="connector-line"></div>
+
+            <div class="loc-input-wrapper">
+              <span class="loc-bullet dropoff-bullet"></span>
+              <input type="text" id="input-dropoff" placeholder="Where do you want to go?" autocomplete="off">
+              <button class="loc-action-btn" id="btn-pick-dropoff" title="Pick point directly on map">📍 Map</button>
+              <div class="autocomplete-dropdown" id="dropoff-autocomplete"></div>
+            </div>
+          </div>
+
+          <!-- Quick Landmark Chips -->
+          <div class="quick-chips">
+            <span class="chips-title">Frequent:</span>
+            <button class="chip" onclick="setPresetLocation('cp_to_ig')">🏛️ CP ➔ India Gate</button>
+            <button class="chip" onclick="setPresetLocation('cp_to_t3')">✈️ CP ➔ IGI Airport</button>
+            <button class="chip" onclick="setPresetLocation('ig_to_cyber')">🏢 India Gate ➔ CyberHub</button>
+          </div>
+
+          <!-- Trip Distance & Duration Header Bar -->
+          <div class="route-metrics" id="route-metrics-bar" style="display: none;">
+            <div class="metric">
+              <span class="m-lbl">Estimated Distance</span>
+              <span class="m-val" id="metric-distance">-- km</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric">
+              <span class="m-lbl">Driving Time</span>
+              <span class="m-val" id="metric-duration">-- mins</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric">
+              <span class="m-lbl">Traffic Level</span>
+              <span class="m-val green" id="metric-traffic">Normal (1.0x)</span>
+            </div>
+          </div>
+
+          <!-- Vehicle Tier Selector -->
+          <div class="section-block">
+            <div class="section-header-flex">
+              <label class="section-title">Available CoGo Rides</label>
+              <span class="category-hint">All rides include sanitization & GPS tracking</span>
+            </div>
+            
+            <div class="vehicle-carousel" id="vehicle-tier-list">
+              <!-- Dynamically populated from /api/vehicles -->
+            </div>
+          </div>
+
+          <!-- Ride Addons & Preferences -->
+          <div class="section-block">
+            <label class="section-title">Trip Addons & Comfort</label>
+            <div class="addons-grid">
+              <label class="addon-card">
+                <input type="checkbox" id="addon-luggage" value="luggage_assist" onchange="onAddonChange()">
+                <div class="addon-content">
+                  <span class="addon-icon">🧳</span>
+                  <div class="addon-text">
+                    <span class="addon-name">Luggage Assistance</span>
+                    <span class="addon-price">+ ₹30</span>
+                  </div>
+                </div>
+              </label>
+
+              <label class="addon-card">
+                <input type="checkbox" id="addon-quiet" value="quiet_ride" onchange="onAddonChange()">
+                <div class="addon-content">
+                  <span class="addon-icon">🤫</span>
+                  <div class="addon-text">
+                    <span class="addon-name">Quiet / Silent Ride</span>
+                    <span class="addon-price">Free</span>
+                  </div>
+                </div>
+              </label>
+
+              <label class="addon-card">
+                <input type="checkbox" id="addon-top-driver" value="top_rated_driver" onchange="onAddonChange()">
+                <div class="addon-content">
+                  <span class="addon-icon">⭐</span>
+                  <div class="addon-text">
+                    <span class="addon-name">Top Captain (★4.9+)</span>
+                    <span class="addon-price">+ ₹25</span>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Coupon Code & Discounts -->
+          <div class="section-block">
+            <div class="coupon-box">
+              <span class="coupon-icon">🏷️</span>
+              <input type="text" id="input-promo-code" placeholder="Enter coupon code (try COGO50)" uppercase>
+              <button class="apply-promo-btn" id="btn-apply-promo" onclick="applyPromoCode()">Apply</button>
+            </div>
+            <div class="promo-feedback" id="promo-message" style="display: none;"></div>
+          </div>
+
+          <!-- Payment Method Selector -->
+          <div class="section-block">
+            <label class="section-title">Payment Method</label>
+            <div class="payment-options">
+              <label class="pay-option selected">
+                <input type="radio" name="payment_method" value="UPI" checked onchange="onPaymentChange(this)">
+                <span class="pay-icon">📱</span>
+                <span class="pay-name">UPI / QR (GPay, PhonePe)</span>
+              </label>
+              <label class="pay-option">
+                <input type="radio" name="payment_method" value="WALLET" onchange="onPaymentChange(this)">
+                <span class="pay-icon">💳</span>
+                <span class="pay-name">CoGo Wallet (₹500)</span>
+              </label>
+              <label class="pay-option">
+                <input type="radio" name="payment_method" value="CASH" onchange="onPaymentChange(this)">
+                <span class="pay-icon">💵</span>
+                <span class="pay-name">Cash to Captain</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Itemized Fare Breakdown Accordion -->
+          <div class="fare-summary-card" id="fare-summary-card" style="display: none;">
+            <div class="fare-line"><span>Base Fare</span><strong id="fs-base">₹0</strong></div>
+            <div class="fare-line"><span>Distance Charge (<span id="fs-km-rate">₹0/km</span>)</span><strong id="fs-dist">₹0</strong></div>
+            <div class="fare-line"><span>Time Charge (<span id="fs-min-rate">₹0/min</span>)</span><strong id="fs-time">₹0</strong></div>
+            <div class="fare-line" id="fs-addons-row" style="display: none;"><span>Selected Addons</span><strong id="fs-addons">₹0</strong></div>
+            <div class="fare-line discount" id="fs-discount-row" style="display: none;"><span>Promo Discount</span><strong id="fs-discount">-₹0</strong></div>
+            <div class="fare-divider"></div>
+            <div class="fare-line total"><span>Estimated Total</span><strong id="fs-total">₹0</strong></div>
+          </div>
+
+          <!-- Book CoGo CTA -->
+          <button class="cogo-primary-btn" id="btn-request-cogo" disabled onclick="requestCoGoRide()">
+            <span id="btn-cogo-text">Confirm & Request CoGo</span>
+          </button>
+        </div>
+
+        <!-- STAGE 2: LIVE RIDE TRACKING -->
+        <div id="stage-booking-active" style="display: none;">
+          <div class="active-status-banner">
+            <div class="status-left">
+              <span class="pulse-indicator"></span>
+              <span class="status-title" id="track-status-title">Searching for Captain</span>
+            </div>
+            <div class="otp-pill" id="track-otp-pill" style="display: none;">
+              <span class="otp-label">START PIN:</span>
+              <strong id="track-otp-value">----</strong>
+            </div>
+          </div>
+
+          <!-- Journey Progress Bar -->
+          <div class="journey-track">
+            <div class="journey-bar" id="track-progress-bar"></div>
+          </div>
+
+          <!-- Captain / Driver Profile Card -->
+          <div class="captain-card" id="track-captain-card" style="display: none;">
+            <div class="captain-avatar-box">
+              <span class="cap-emoji" id="track-cap-avatar">👨‍✈️</span>
+              <span class="cap-rating">★ <span id="track-cap-rating">4.9</span></span>
+            </div>
+            <div class="captain-details">
+              <h3 id="track-cap-name">Captain Name</h3>
+              <p class="cap-car" id="track-cap-car">Swift ZXi • DL 3C CC 4920</p>
+              <div class="cap-badges">
+                <span class="mini-badge">Verified Captain</span>
+                <span class="mini-badge" id="track-cap-trips">2,840 rides</span>
+              </div>
+            </div>
+            <div class="captain-actions">
+              <a href="tel:9876543210" class="cap-btn" title="Call Captain">📞</a>
+              <button class="cap-btn" onclick="alert('Captain is on route with GPS active.')" title="Message Captain">💬</button>
+            </div>
+          </div>
+
+          <!-- Searching Radar Animation -->
+          <div class="radar-box" id="track-radar-box">
+            <div class="sonar-wave"></div>
+            <p>Scanning nearby available captains in your vicinity...</p>
+          </div>
+
+          <!-- Live Trip Route Box -->
+          <div class="trip-route-box">
+            <div class="route-step">
+              <span class="step-dot pickup"></span>
+              <div class="step-info">
+                <label>Pickup Location</label>
+                <p id="track-pickup-name">--</p>
+              </div>
+            </div>
+            <div class="route-step">
+              <span class="step-dot dropoff"></span>
+              <div class="step-info">
+                <label>Destination</label>
+                <p id="track-dropoff-name">--</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Safety & Quick Actions -->
+          <div class="trip-action-grid">
+            <button class="action-tile safety-sos" onclick="triggerSOS()">
+              <span class="tile-icon">🚨</span>
+              <span>Emergency SOS</span>
+            </button>
+            <button class="action-tile share-ride" onclick="shareLiveTrip()">
+              <span class="tile-icon">🔗</span>
+              <span>Share Trip</span>
+            </button>
+            <button class="action-tile cancel-ride" onclick="cancelCurrentTrip()">
+              <span class="tile-icon">✕</span>
+              <span>Cancel Ride</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- STAGE 3: COMPLETED TRIP RECEIPT -->
+        <div id="stage-booking-receipt" style="display: none;">
+          <div class="receipt-success-badge">
+            <span class="check-icon">✓</span>
+            <h2>Destination Reached!</h2>
+            <p>Thank you for traveling with CoGo Mobility</p>
+          </div>
+
+          <div class="receipt-invoice-card">
+            <div class="invoice-amount" id="rcpt-final-fare">₹0.00</div>
+            <div class="invoice-status">Payment Completed via <strong id="rcpt-pay-method">UPI</strong></div>
+            
+            <div class="invoice-lines">
+              <div class="inv-row"><span>Total Distance:</span><strong id="rcpt-distance">-- km</strong></div>
+              <div class="inv-row"><span>Travel Time:</span><strong id="rcpt-time">-- min</strong></div>
+              <div class="inv-row"><span>Vehicle:</span><strong id="rcpt-car">Swift ZXi</strong></div>
+              <div class="inv-row"><span>Captain:</span><strong id="rcpt-captain">Rajesh Sharma</strong></div>
+              <div class="inv-row" id="rcpt-discount-row" style="display: none;"><span>Discount Applied:</span><strong class="green" id="rcpt-discount">-₹0</strong></div>
+            </div>
+          </div>
+
+          <!-- Tip Captain -->
+          <div class="tip-section">
+            <label>Add a Tip for your Captain:</label>
+            <div class="tip-chips">
+              <button class="tip-btn active" onclick="setTip(0, this)">₹0</button>
+              <button class="tip-btn" onclick="setTip(20, this)">+₹20</button>
+              <button class="tip-btn" onclick="setTip(50, this)">+₹50</button>
+              <button class="tip-btn" onclick="setTip(100, this)">+₹100</button>
+            </div>
+          </div>
+
+          <!-- Star Rating -->
+          <div class="star-rating-box">
+            <label>How was your trip experience?</label>
+            <div class="stars-row" id="star-row">
+              <span class="star active" onclick="setRating(1)">★</span>
+              <span class="star active" onclick="setRating(2)">★</span>
+              <span class="star active" onclick="setRating(3)">★</span>
+              <span class="star active" onclick="setRating(4)">★</span>
+              <span class="star active" onclick="setRating(5)">★</span>
+            </div>
+            <input type="text" id="input-feedback-note" class="feedback-input" placeholder="Leave a compliment for your captain (optional)">
+          </div>
+
+          <button class="cogo-primary-btn" onclick="submitRatingAndReset()">Book Another CoGo Ride</button>
+        </div>
+
+      </div>
+
+      <!-- ==================== DRIVER / CAPTAIN CONSOLE ==================== -->
+      <div id="panel-driver" class="view-panel">
+        <div class="panel-headline">
+          <h2>Captain Partner Console</h2>
+          <p class="panel-sub">Manage availability, receive ride requests & track earnings</p>
+        </div>
+
+        <div class="captain-status-toggle-card">
+          <div class="status-meta">
+            <span class="duty-label">Duty Status:</span>
+            <span class="duty-state online" id="captain-duty-text">ONLINE & READY</span>
+          </div>
+          <button class="duty-toggle-switch online" id="btn-toggle-captain-duty" onclick="toggleCaptainDuty()">GO OFFLINE</button>
+        </div>
+
+        <!-- Daily Earnings Widget -->
+        <div class="earnings-widget">
+          <div class="earn-box">
+            <span class="earn-amt">₹ 2,420</span>
+            <span class="earn-lbl">Today's Earnings</span>
+          </div>
+          <div class="earn-box">
+            <span class="earn-amt">9</span>
+            <span class="earn-lbl">Trips Done</span>
+          </div>
+          <div class="earn-box">
+            <span class="earn-amt">★ 4.93</span>
+            <span class="earn-lbl">Rating</span>
+          </div>
+        </div>
+
+        <!-- Incoming Ride Offer Modal in Driver View -->
+        <div class="driver-offer-modal" id="driver-offer-modal" style="display: none;">
+          <div class="offer-timer-header">
+            <span class="offer-tag">INCOMING RIDE OFFER</span>
+            <span class="offer-countdown" id="driver-offer-timer">15s</span>
+          </div>
+          <h3 id="driver-offer-veh">CoGo Go (Swift)</h3>
+          <div class="offer-payout" id="driver-offer-fare">₹ 210.00</div>
+          
+          <div class="offer-points">
+            <div class="op-row">● Pickup: <strong id="driver-offer-pname">Connaught Place</strong></div>
+            <div class="op-row">■ Drop: <strong id="driver-offer-dname">India Gate</strong></div>
+          </div>
+
+          <div class="offer-cta-group">
+            <button class="decline-btn" onclick="captainRejectTrip()">Decline</button>
+            <button class="accept-btn" onclick="captainAcceptTrip()">Accept Trip</button>
+          </div>
+        </div>
+
+        <div class="captain-fleet-info">
+          <h4>Active Delhi-NCR Fleet</h4>
+          <p>8 real automotive captains (Moto, Auto, WagonR, Swift, Dzire, Ciaz, Innova, Nexon EV) are deployed across Delhi, Gurugram, and Noida.</p>
+        </div>
+      </div>
+
+      <!-- ==================== HISTORY VIEW ==================== -->
+      <div id="panel-history" class="view-panel">
+        <div class="panel-headline">
+          <h2>Your Ride History</h2>
+          <p class="panel-sub">Receipts, invoices, and past completed journeys</p>
+        </div>
+        <div class="history-cards-container" id="history-cards-list">
+          <!-- Loaded via /api/history -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- Map Viewport -->
+    <section class="map-viewport">
+      <div id="map"></div>
+
+      <!-- Floating Map Direction Instructions Toast -->
+      <div class="map-toast" id="map-toast">
+        <span id="toast-text">📍 Click on map to set Pickup location</span>
+      </div>
+
+      <!-- Quick Layer Badge -->
+      <div class="map-badge-overlay">
+        <span>⚡ CoGo Real-Time Fleet Active</span>
+      </div>
+    </section>
+  </main>
+
+  <!-- SOS Emergency Modal -->
+  <div class="cogo-modal-backdrop" id="modal-sos" style="display: none;">
+    <div class="cogo-modal">
+      <div class="modal-header">
+        <h3>🚨 Emergency Safety Hub</h3>
+        <button class="modal-close-btn" onclick="closeSafetyModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>Your safety is our #1 priority. Tap below to connect directly with national emergency responders:</p>
+        
+        <div class="sos-action-list">
+          <a href="tel:112" class="sos-call-card red">
+            <span class="sos-num">112</span>
+            <div>
+              <strong>National Emergency Police</strong>
+              <p>Immediate 24x7 police dispatch</p>
+            </div>
+          </a>
+          <a href="tel:1091" class="sos-call-card purple">
+            <span class="sos-num">1091</span>
+            <div>
+              <strong>Women Safety Helpline</strong>
+              <p>Specialized assistance & quick response</p>
+            </div>
+          </a>
+          <a href="tel:102" class="sos-call-card blue">
+            <span class="sos-num">102</span>
+            <div>
+              <strong>Ambulance & Medical Emergency</strong>
+              <p>Government emergency medical services</p>
+            </div>
+          </a>
+        </div>
+
+        <div class="sos-live-coords" id="sos-coords-box">
+          <span>Current Trip Coordinates:</span>
+          <strong id="sos-coords-text">28.6315° N, 77.2167° E</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

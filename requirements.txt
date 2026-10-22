@@ -1,0 +1,8 @@
+# CabBooking Uber Platform Prototype
+#
+# Core prototype runs 100% on Python Standard Library (Python 3.10+) with ZERO dependencies!
+#
+# Optional production extensions:
+# fastapi>=0.110.0
+# uvicorn>=0.28.0
+# websockets>=12.0
