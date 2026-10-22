@@ -170,26 +170,61 @@ function setDropoffLocation(lat, lng, address) {
   updateRoute();
 }
 
-function updateRoute() {
+/* ==========================================================================
+   OSRM Real Road Routing Engine (100% Free & No API Key Required)
+   ========================================================================== */
+async function fetchOSRMRoute(startLat, startLng, endLat, endLng) {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("OSRM response not ok");
+    const data = await res.json();
+    if (data.routes && data.routes.length > 0) {
+      const route = data.routes[0];
+      const latlngs = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+      const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
+      const durationMin = Math.max(Math.round(route.duration / 60), 3);
+      return { latlngs, distanceKm, durationMin };
+    }
+  } catch (err) {
+    console.warn("OSRM routing unavailable, using road detour factor:", err);
+  }
+  return null;
+}
+
+async function updateRoute() {
   if (!state.pickup || !state.dropoff) return;
 
-  const points = [
+  const directPoints = [
     [state.pickup.lat, state.pickup.lng],
     [state.dropoff.lat, state.dropoff.lng]
   ];
 
+  // Draw initial path
   if (state.routePolyline) {
-    state.routePolyline.setLatLngs(points);
+    state.routePolyline.setLatLngs(directPoints);
+    state.routePolyline.setStyle({ color: '#0d1117', weight: 4, dashArray: '6, 6' });
   } else {
-    state.routePolyline = L.polyline(points, {
+    state.routePolyline = L.polyline(directPoints, {
       color: '#0d1117',
       weight: 4,
-      dashArray: '8, 8',
+      dashArray: '6, 6',
       opacity: 0.85
     }).addTo(state.map);
   }
 
-  state.map.fitBounds(L.latLngBounds(points), { padding: [70, 70] });
+  state.map.fitBounds(L.latLngBounds(directPoints), { padding: [70, 70] });
+
+  // Query real street-snapped route from OSRM
+  const osrm = await fetchOSRMRoute(state.pickup.lat, state.pickup.lng, state.dropoff.lat, state.dropoff.lng);
+  if (osrm && osrm.latlngs.length > 0) {
+    state.routeGeometry = osrm.latlngs;
+    state.routePolyline.setLatLngs(osrm.latlngs);
+    // Real solid road polyline with vibrant CoGo Emerald styling
+    state.routePolyline.setStyle({ color: '#00c853', weight: 5, dashArray: null, opacity: 0.9 });
+    state.map.fitBounds(L.latLngBounds(osrm.latlngs), { padding: [70, 70] });
+  }
+
   fetchEstimates();
 }
 
@@ -226,8 +261,31 @@ function setupAutocomplete(inputId, dropdownId, targetType) {
 
 async function fetchPlaces(query, dropdownEl, targetType) {
   try {
+    let places = [];
     const res = await fetch(`/api/places?q=${encodeURIComponent(query)}`);
-    const places = await res.json();
+    places = await res.json();
+
+    // Query Nominatim (100% Free OpenStreetMap Geocoder) if query >= 3 chars & local results sparse
+    if (query && query.trim().length >= 3 && places.length < 3) {
+      try {
+        const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4&countrycodes=in`);
+        if (nomRes.ok) {
+          const nomData = await nomRes.json();
+          nomData.forEach(item => {
+            places.push({
+              id: `nom_${item.place_id}`,
+              name: item.display_name.split(',')[0],
+              address: item.display_name,
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon)
+            });
+          });
+        }
+      } catch (nomErr) {
+        // Fallback to local places if offline
+      }
+    }
+
     if (!places || places.length === 0) {
       dropdownEl.style.display = 'none';
       return;
